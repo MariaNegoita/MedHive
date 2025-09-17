@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "122019632128",
+    "project_id": "medhive-proj",
+    "storage_bucket": "medhive-proj.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:122019632128:android:4de7900e20f46971bab4e5",
+        "android_client_info": {
+          "package_name": "com.example.medhive_proj"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDihWsiXr-Tv-YTemS59CUERanuuc4E2tQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
