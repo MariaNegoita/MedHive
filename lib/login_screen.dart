@@ -1,27 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-void main() {
-  runApp(const MedHiveApp());
-}
-
-class MedHiveApp extends StatelessWidget {
-  const MedHiveApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'MedHive Login',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        fontFamily: 'Arial',
-        scaffoldBackgroundColor: LoginScreen.primaryBackground,
-      ),
-      home: const LoginScreen(),
-    );
-  }
-}
-
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
