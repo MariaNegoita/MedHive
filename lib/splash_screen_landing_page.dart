@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'home_page.dart';
+import 'login_screen.dart';
+import 'signup_screen.dart';
 
 // Root widget that sets up the MaterialApp configuration
 class MedHiveApp extends StatelessWidget {
@@ -33,143 +32,21 @@ class _MedHiveSplashScreenState extends State<MedHiveSplashScreen>
   // Flag to track when the animation should start
   bool _animationStarted = false;
 
-  // Resolve FirebaseAuth lazily to avoid accessing before Firebase is initialized (especially on web)
-  FirebaseAuth get _auth => FirebaseAuth.instance;
-
-  bool _isFirebaseReady() {
-    return Firebase.apps.isNotEmpty;
-  }
 
   // Method to handle LOG IN button press
-  void _handleLogin() async {
-    try {
-      if (!_isFirebaseReady()) {
-        _showMessage('Firebase is not configured yet. Please run flutterfire configure and restart the app.');
-        return;
-      }
-      final credentials = await _promptForCredentials(title: 'Log In');
-      if (credentials == null) return;
-      final userCredential = await _auth.signInWithEmailAndPassword(
-        email: credentials['email']!,
-        password: credentials['password']!,
-      );
-      _showMessage('Logged in as ${userCredential.user?.email ?? 'Unknown'}');
-      if (!mounted) return;
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => HomePage()),
-      );
-    } on FirebaseAuthException catch (e) {
-      _showMessage(e.message ?? 'Login failed');
-    } catch (e) {
-      _showMessage('Login failed: $e');
-    }
+  void _handleLogin() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => LoginScreen()),
+    );
   }
 
   // Method to handle SIGN UP button press
-  void _handleSignUp() async {
-    try {
-      if (!_isFirebaseReady()) {
-        _showMessage('Firebase is not configured yet. Please run flutterfire configure and restart the app.');
-        return;
-      }
-      final credentials = await _promptForCredentials(title: 'Sign Up');
-      if (credentials == null) return;
-      final userCredential = await _auth.createUserWithEmailAndPassword(
-        email: credentials['email']!,
-        password: credentials['password']!,
-      );
-      _showMessage('Account created for ${userCredential.user?.email ?? 'Unknown'}');
-      if (!mounted) return;
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => HomePage()),
-      );
-    } on FirebaseAuthException catch (e) {
-      _showMessage(e.message ?? 'Sign up failed');
-    } catch (e) {
-      _showMessage('Sign up failed: $e');
-    }
-  }
-
-  Future<Map<String, String>?> _promptForCredentials({required String title}) async {
-    final formKey = GlobalKey<FormState>();
-    final emailController = TextEditingController();
-    final passwordController = TextEditingController();
-    final result = await showDialog<Map<String, String>?>(
-      context: context,
-      builder: (context) {
-        bool obscure = true;
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: Text(title),
-              content: Form(
-                key: formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextFormField(
-                      controller: emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      decoration: const InputDecoration(labelText: 'Email'),
-                      validator: (value) {
-                        final email = value?.trim() ?? '';
-                        if (email.isEmpty) return 'Email is required';
-                        final emailRegex = RegExp(r'^\S+@\S+\.[\S]+$');
-                        if (!emailRegex.hasMatch(email)) return 'Enter a valid email';
-                        return null;
-                      },
-                    ),
-                    TextFormField(
-                      controller: passwordController,
-                      obscureText: obscure,
-                      decoration: InputDecoration(
-                        labelText: 'Password',
-                        suffixIcon: IconButton(
-                          icon: Icon(obscure ? Icons.visibility : Icons.visibility_off),
-                          onPressed: () => setState(() => obscure = !obscure),
-                        ),
-                      ),
-                      validator: (value) {
-                        final password = value ?? '';
-                        if (password.isEmpty) return 'Password is required';
-                        if (password.length < 6) return 'At least 6 characters';
-                        return null;
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(null),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    if (formKey.currentState?.validate() == true) {
-                      Navigator.of(context).pop({
-                        'email': emailController.text.trim(),
-                        'password': passwordController.text,
-                      });
-                    }
-                  },
-                  child: const Text('Continue'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-    return result;
-  }
-
-  void _showMessage(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
+  void _handleSignUp() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => SignUpScreen()),
     );
   }
+
 
   @override
   void initState() {
@@ -214,7 +91,7 @@ class _MedHiveSplashScreenState extends State<MedHiveSplashScreen>
     final screenSize = MediaQuery.of(context).size;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF4B2A17), // Dark brown background
+      backgroundColor: const Color(0xFF50341E), // Dark brown background - same as login/signup
       body: Stack(
         children: [
           // Large background circle that creates depth
