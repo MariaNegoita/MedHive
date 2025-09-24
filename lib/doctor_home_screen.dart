@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:ui'; // Import necesar pentru ImageFilter
 
 class Patient {
   final String name;
@@ -39,11 +40,99 @@ class DoctorHomeScreen extends StatefulWidget {
 
 class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
   String searchText = "";
-  List<Patient> patients = [
-    Patient(),
-    Patient(),
-    Patient(),
-  ];
+  List<Patient> allPatients = []; // Toate pacienții din Firebase
+  List<Patient> patients = []; // Pacienții filtrați pentru afișare
+  bool isLoading = true;
+  int selectedTab = 0; // 0 = Home, 1 = Plus, 2 = Menu
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPatients();
+  }
+
+  void _filterPatients() {
+    if (searchText.isEmpty) {
+      patients = List.from(allPatients);
+    } else {
+      patients = allPatients.where((patient) {
+        final searchLower = searchText.toLowerCase();
+        return patient.name.toLowerCase().contains(searchLower) ||
+               patient.room.toLowerCase().contains(searchLower) ||
+               patient.age.toLowerCase().contains(searchLower) ||
+               patient.problem.toLowerCase().contains(searchLower);
+      }).toList();
+    }
+    print('🔍 Filtered ${patients.length} patients for search: "$searchText"');
+  }
+
+  void _loadPatients() async {
+    try {
+      print('🔄 Loading patients...');
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        print('❌ No user logged in');
+        setState(() {
+          isLoading = false;
+        });
+        return;
+      }
+      
+      print('👤 User ID: ${user.uid}');
+
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('patients')
+          .where('doctorId', isEqualTo: user.uid)
+          .get();
+
+      print('📊 Found ${querySnapshot.docs.length} patients');
+
+      setState(() {
+        allPatients = querySnapshot.docs.map((doc) {
+          final data = doc.data();
+          print('📋 Patient data: $data');
+          return Patient(
+            name: '${data['firstName'] ?? ''} ${data['lastName'] ?? ''}'.trim(),
+            room: data['room'] ?? '',
+            age: data['age']?.toString() ?? '',
+            problem: data['symptoms'] ?? '',
+          );
+        }).toList();
+        
+        // Filtrează pacienții în funcție de searchText
+        _filterPatients();
+        isLoading = false;
+      });
+      
+      print('✅ Loaded ${patients.length} patients');
+    } catch (e) {
+      print('❌ Error loading patients: $e');
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
+  void _showPatientForm(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black12.withOpacity(0.5),
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.all(20),
+          child: PatientFormDialog(
+            onPatientAdded: () {
+              _loadPatients();
+              setState(() {
+                selectedTab = 0; // Reset to Home when form closes
+              });
+            },
+          ),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -119,6 +208,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                               onChanged: (value) {
                                 setState(() {
                                   searchText = value;
+                                  _filterPatients();
                                 });
                               },
                               style: const TextStyle(fontSize: 17, color: Colors.white),
@@ -126,16 +216,21 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                                 hintText: "Search patients...",
                                 hintStyle: TextStyle(fontSize: 17, color: Color(0xFFD2B48C)),
                                 border: InputBorder.none,
+                                contentPadding: EdgeInsets.zero,
+                                isDense: true,
                               ),
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          Container(
-                            width: 22,
-                            height: 22,
-                            decoration: const BoxDecoration(
+                          const SizedBox(width: 12),
+                          GestureDetector(
+                            onTap: () {
+                              // Reîncarcă din Firebase și filtrează din nou
+                              _loadPatients();
+                            },
+                            child: const Icon(
+                              Icons.search,
                               color: Color(0xFFD2B48C),
-                              shape: BoxShape.circle,
+                              size: 24,
                             ),
                           ),
                         ],
@@ -145,25 +240,45 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
 
                   const SizedBox(height: 40),
 
+
+                  const SizedBox(height: 20),
+
                   // Patient Cards
                   Expanded(
-                    child: ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 20),
-                      itemCount: patients.length,
-                      itemBuilder: (context, index) {
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 20),
-                          child: PatientCard(
-                            patient: patients[index],
-                            onPatientChange: (updatedPatient) {
-                              setState(() {
-                                patients[index] = updatedPatient;
-                              });
-                            },
-                          ),
-                        );
-                      },
-                    ),
+                    child: isLoading
+                        ? const Center(
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                            ),
+                          )
+                        : patients.isEmpty
+                            ? const Center(
+                                child: Text(
+                                  'No patients found.\nTap the + button to add a patient.',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              )
+                            : ListView.builder(
+                                padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 20),
+                                itemCount: patients.length,
+                                itemBuilder: (context, index) {
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 20),
+                                    child: PatientCard(
+                                      patient: patients[index],
+                                      onPatientChange: (updatedPatient) {
+                                        setState(() {
+                                          patients[index] = updatedPatient;
+                                        });
+                                      },
+                                    ),
+                                  );
+                                },
+                              ),
                   ),
                 ],
               ),
@@ -195,40 +310,81 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
                         // Home icon
-                        Container(
-                          width: 24,
-                          height: 24,
-                          child: CustomPaint(
-                            painter: HomeIconPainter(),
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () {
+                            setState(() {
+                              selectedTab = 0;
+                            });
+                            print('Home button tapped!');
+                          },
+                          child: Container(
+                            width: 24,
+                            height: 24,
+                            decoration: selectedTab == 0 
+                                ? BoxDecoration(
+                                    color: const Color(0xFFD2B48C).withOpacity(0.3),
+                                    borderRadius: BorderRadius.circular(4),
+                                  )
+                                : null,
+                            child: CustomPaint(
+                              painter: HomeIconPainter(),
+                            ),
                           ),
                         ),
                         
                         // Plus button
-                        Container(
-                          width: 36,
-                          height: 36,
-                          decoration: const BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black26,
-                                blurRadius: 2,
-                                offset: Offset(0, 1),
-                              ),
-                            ],
-                          ),
-                          child: CustomPaint(
-                            painter: PlusIconPainter(),
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () {
+                            setState(() {
+                              selectedTab = 1;
+                            });
+                            print('Plus button tapped!');
+                            _showPatientForm(context);
+                          },
+                          child: Container(
+                            width: 36,
+                            height: 36,
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black26,
+                                  blurRadius: 2,
+                                  offset: Offset(0, 1),
+                                ),
+                              ],
+                            ),
+                            child: CustomPaint(
+                              painter: PlusIconPainter(),
+                            ),
                           ),
                         ),
                         
                         // Menu icon
-                        Container(
-                          width: 24,
-                          height: 24,
-                          child: CustomPaint(
-                            painter: MenuIconPainter(),
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () {
+                            setState(() {
+                              selectedTab = 2;
+                            });
+                            print('Menu button tapped!');
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Menu button pressed'),
+                                backgroundColor: Color(0xFF4B2A17),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          },
+                          child: Container(
+                            width: 24,
+                            height: 24,
+                            child: CustomPaint(
+                              painter: MenuIconPainter(),
+                            ),
                           ),
                         ),
                       ],
@@ -372,10 +528,14 @@ class PatientField extends StatelessWidget {
 }
 
 class HomeIconPainter extends CustomPainter {
+  final Color color;
+  
+  HomeIconPainter({this.color = Colors.white});
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.white
+      ..color = color
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.5;
 
@@ -441,4 +601,273 @@ class MenuIconPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class PatientFormDialog extends StatefulWidget {
+  final VoidCallback? onPatientAdded;
+  
+  const PatientFormDialog({Key? key, this.onPatientAdded}) : super(key: key);
+
+  @override
+  State<PatientFormDialog> createState() => _PatientFormDialogState();
+}
+
+class _PatientFormDialogState extends State<PatientFormDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final TextEditingController _firstNameController = TextEditingController();
+  final TextEditingController _lastNameController = TextEditingController();
+  final TextEditingController _ageController = TextEditingController();
+  final TextEditingController _roomController = TextEditingController();
+  final TextEditingController _symptomsController = TextEditingController();
+
+  @override
+  void dispose() {
+    _firstNameController.dispose();
+    _lastNameController.dispose();
+    _ageController.dispose();
+    _roomController.dispose();
+    _symptomsController.dispose();
+    super.dispose();
+  }
+
+  void _submitForm() async {
+    if (_formKey.currentState!.validate()) {
+      try {
+        print('💾 Saving patient...');
+        // Get current user
+        final user = FirebaseAuth.instance.currentUser;
+        if (user == null) {
+          print('❌ No user logged in');
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('You must be logged in to add patients'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+
+        print('👤 Doctor ID: ${user.uid}');
+        print('📝 Patient data: ${_firstNameController.text}, ${_lastNameController.text}');
+
+        // Save patient to Firestore
+        final docRef = await FirebaseFirestore.instance.collection('patients').add({
+          'firstName': _firstNameController.text.trim(),
+          'lastName': _lastNameController.text.trim(),
+          'age': int.parse(_ageController.text.trim()),
+          'room': _roomController.text.trim(),
+          'symptoms': _symptomsController.text.trim(),
+          'doctorId': user.uid,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+
+        print('✅ Patient saved with ID: ${docRef.id}');
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Patient added successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        // Clear form
+        _firstNameController.clear();
+        _lastNameController.clear();
+        _ageController.clear();
+        _roomController.clear();
+        _symptomsController.clear();
+
+        Navigator.of(context).pop();
+        
+        // Reload patients list and reset to Home
+        if (widget.onPatientAdded != null) {
+          widget.onPatientAdded!();
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error adding patient: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Color(0xFFDECBB7),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.2),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Add patient:',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                _buildTextField(
+                  controller: _firstNameController,
+                  label: 'First name',
+                  icon: Icons.person,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter first name';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                _buildTextField(
+                  controller: _lastNameController,
+                  label: 'Last name',
+                  icon: Icons.person_outline,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter last name';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                _buildTextField(
+                  controller: _ageController,
+                  label: 'Age',
+                  icon: Icons.calendar_today,
+                  keyboardType: TextInputType.number,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter age';
+                    }
+                    if (int.tryParse(value) == null) {
+                      return 'Please enter a valid number';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                _buildTextField(
+                  controller: _roomController,
+                  label: 'Room',
+                  icon: Icons.meeting_room,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter room number';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                _buildTextField(
+                  controller: _symptomsController,
+                  label: 'Symptoms',
+                  icon: Icons.healing,
+                  maxLines: 3,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please describe symptoms';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          // Reset to Home when canceling
+                          if (widget.onPatientAdded != null) {
+                            widget.onPatientAdded!();
+                          }
+                        },
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          side: const BorderSide(color: Colors.black),
+                        ),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(color: Colors.black),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: _submitForm,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: const Text(
+                          'Submit',
+                          style: TextStyle(fontSize: 16, color: Color(0xFFDECBB7)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    TextInputType keyboardType = TextInputType.text,
+    int maxLines = 1,
+    required String? Function(String?) validator,
+  }) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: keyboardType,
+      maxLines: maxLines,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: Colors.black),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: Colors.black),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: Colors.black, width: 2),
+        ),
+        filled: true,
+        fillColor: Color(0xFFDECBB7),
+      ),
+      validator: validator,
+    );
+  }
 }
