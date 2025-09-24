@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'doctor_home_screen.dart';
+import 'patient_home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -64,11 +65,47 @@ class _LoginScreenState extends State<LoginScreen> {
         }
 
         if (mounted) {
-          _showMessage('Logged in as ${user.email ?? 'Unknown'}');
-          print('✅ NAVIGATING TO DOCTOR HOME SCREEN');
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => DoctorHomeScreen()),
-          );
+          // Verifică userType din Firestore pentru a naviga la screen-ul corect
+          try {
+            final userDoc = await FirebaseFirestore.instance
+                .collection('users')
+                .doc(user.uid)
+                .get();
+            
+            if (userDoc.exists) {
+              final userData = userDoc.data()!;
+              final userType = userData['userType'] ?? 'doctor'; // Default la doctor
+              
+              print('User type: $userType');
+              _showMessage('Logged in as ${user.email ?? 'Unknown'} ($userType)');
+              
+              if (userType == 'patient') {
+                print('✅ NAVIGATING TO PATIENT HOME SCREEN');
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(builder: (_) => PatientHomeScreen()),
+                );
+              } else {
+                print('✅ NAVIGATING TO DOCTOR HOME SCREEN');
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(builder: (_) => DoctorHomeScreen()),
+                );
+              }
+            } else {
+              // Dacă nu există documentul, navighează la doctor (fallback)
+              print('⚠️ User document not found, defaulting to doctor screen');
+              _showMessage('Logged in as ${user.email ?? 'Unknown'}');
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (_) => DoctorHomeScreen()),
+              );
+            }
+          } catch (e) {
+            print('Error checking user type: $e');
+            // Fallback la doctor screen
+            _showMessage('Logged in as ${user.email ?? 'Unknown'}');
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (_) => DoctorHomeScreen()),
+            );
+          }
         }
       }
     } on FirebaseAuthException catch (e) {

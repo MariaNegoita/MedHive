@@ -131,7 +131,12 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
           ),
         );
       },
-    );
+    ).then((_) {
+      // Reset to Home when dialog is dismissed (including when tapping outside)
+      setState(() {
+        selectedTab = 0;
+      });
+    });
   }
 
   @override
@@ -163,27 +168,13 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                     padding: const EdgeInsets.only(top: 60, bottom: 30),
                     child: Center(
                       child: Container(
-                        width: 140,
-                        height: 140,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(32),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.3),
-                              blurRadius: 8,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                          border: Border.all(color: Colors.white.withOpacity(0.05), width: 1),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(32),
-                          child: Image.asset(
-                            'assets/images/logo2.png',
-                            width: 140,
-                            height: 140,
-                            fit: BoxFit.cover,
-                          ),
+                        width: 160,
+                        height: 160,
+                        child: Image.asset(
+                          'assets/images/logo3.png',
+                          width: 160,
+                          height: 160,
+                          fit: BoxFit.cover,
                         ),
                       ),
                     ),
@@ -293,18 +284,15 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                     width: MediaQuery.of(context).size.width * 0.85,
                     height: 60,
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Colors.black, Color(0xFF1A1A1A), Colors.black],
-                      ),
-                      borderRadius: BorderRadius.circular(20),
+                      color: Colors.black,
+                      borderRadius: BorderRadius.circular(32),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withOpacity(0.3),
-                          blurRadius: 8,
+                          blurRadius: 10,
                           offset: const Offset(0, 4),
                         ),
                       ],
-                      border: Border.all(color: Colors.white.withOpacity(0.1), width: 1),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -318,22 +306,14 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                             });
                             print('Home button tapped!');
                           },
-                          child: Container(
-                            width: 24,
-                            height: 24,
-                            decoration: selectedTab == 0 
-                                ? BoxDecoration(
-                                    color: const Color(0xFFD2B48C).withOpacity(0.3),
-                                    borderRadius: BorderRadius.circular(4),
-                                  )
-                                : null,
-                            child: CustomPaint(
-                              painter: HomeIconPainter(),
-                            ),
+                          child: Icon(
+                            Icons.home, 
+                            color: selectedTab == 0 ? Colors.orange : Colors.white,
+                            size: 24,
                           ),
                         ),
                         
-                        // Plus button
+                        // Plus button - constant circle
                         GestureDetector(
                           behavior: HitTestBehavior.opaque,
                           onTap: () {
@@ -346,8 +326,8 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                           child: Container(
                             width: 36,
                             height: 36,
-                            decoration: const BoxDecoration(
-                              color: Colors.white,
+                            decoration: BoxDecoration(
+                              color: selectedTab == 1 ? Colors.orange : Colors.white,
                               shape: BoxShape.circle,
                               boxShadow: [
                                 BoxShadow(
@@ -357,8 +337,10 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                                 ),
                               ],
                             ),
-                            child: CustomPaint(
-                              painter: PlusIconPainter(),
+                            child: Icon(
+                              Icons.add,
+                              color: selectedTab == 1 ? Colors.white : Colors.black,
+                              size: 24,
                             ),
                           ),
                         ),
@@ -379,12 +361,10 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                               ),
                             );
                           },
-                          child: Container(
-                            width: 24,
-                            height: 24,
-                            child: CustomPaint(
-                              painter: MenuIconPainter(),
-                            ),
+                          child: Icon(
+                            Icons.menu, 
+                            color: selectedTab == 2 ? Colors.orange : Colors.white,
+                            size: 24,
                           ),
                         ),
                       ],
