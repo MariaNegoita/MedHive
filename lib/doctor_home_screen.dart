@@ -139,6 +139,25 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
     });
   }
 
+  void _showSettingsDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black12.withOpacity(0.5),
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.all(20),
+          child: SettingsDialog(),
+        );
+      },
+    ).then((_) {
+      // Reset to Home when dialog is dismissed (including when tapping outside)
+      setState(() {
+        selectedTab = 0;
+      });
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -171,7 +190,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                         width: 160,
                         height: 160,
                         child: Image.asset(
-                          'assets/images/logo3.png',
+                          'assets/images/logo.png',
                           width: 160,
                           height: 160,
                           fit: BoxFit.cover,
@@ -353,13 +372,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                               selectedTab = 2;
                             });
                             print('Menu button tapped!');
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Menu button pressed'),
-                                backgroundColor: Color(0xFF4B2A17),
-                                duration: Duration(seconds: 2),
-                              ),
-                            );
+                            _showSettingsDialog(context);
                           },
                           child: Icon(
                             Icons.menu, 
@@ -848,6 +861,735 @@ class _PatientFormDialogState extends State<PatientFormDialog> {
         fillColor: Color(0xFFDECBB7),
       ),
       validator: validator,
+    );
+  }
+}
+
+class SettingsDialog extends StatelessWidget {
+  const SettingsDialog({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: const Color(0xFFDECBB7),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.2),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Header
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Settings',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black,
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => Navigator.of(context).pop(),
+                  child: const Icon(
+                    Icons.close,
+                    color: Colors.black,
+                    size: 24,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            const Divider(color: Colors.black26, thickness: 3),
+            
+            // Account Section
+            _buildMenuItem(
+              icon: Icons.person,
+              title: 'Account',
+              onTap: () => _showMessage(context, 'Account tapped'),
+            ),
+            const Divider(color: Colors.black26, thickness: 3),
+            
+            _buildSubMenuItem(
+              title: 'Change picture',
+              onTap: () => _showMessage(context, 'Change picture tapped'),
+            ),
+            
+            _buildSubMenuItem(
+              title: 'Change password',
+              onTap: () => _showChangePasswordDialog(context),
+            ),
+            
+            _buildSubMenuItem(
+              title: 'Account information',
+              onTap: () => _showAccountInfoDialog(context),
+            ),
+            const Divider(color: Colors.black26, thickness: 3),
+            
+            // Other Options
+            _buildMenuItem(
+              icon: Icons.description,
+              title: 'Terms & Conditions',
+              onTap: () => _showMessage(context, 'Terms & Conditions tapped'),
+              hasArrow: false,
+            ),
+            const Divider(color: Colors.black26, thickness: 3),
+            
+            _buildMenuItem(
+              icon: Icons.logout,
+              title: 'Log out',
+              onTap: () => _handleLogout(context),
+            ),
+            const Divider(color: Colors.black26, thickness: 3),
+            
+            _buildMenuItem(
+              icon: Icons.person_remove,
+              title: 'Delete account',
+              onTap: () => _showDeleteAccountDialog(context),
+            ),
+            const Divider(color: Colors.black26, thickness: 3),
+            
+            _buildMenuItem(
+              icon: Icons.sentiment_satisfied_alt,
+              title: 'Feedback',
+              onTap: () => _showMessage(context, 'Feedback tapped'),
+              hasArrow: false,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMenuItem({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+    bool hasArrow = false,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              color: Colors.black,
+              size: 24,
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: Colors.black,
+                ),
+              ),
+            ),
+            if (hasArrow)
+              const Icon(
+                Icons.chevron_right,
+                color: Colors.black,
+                size: 24,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSubMenuItem({
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: Color(0xFF666666), // Text mai deschis
+                ),
+              ),
+            ),
+            const Icon(
+              Icons.chevron_right,
+              color: Colors.black,
+              size: 24,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _handleLogout(BuildContext context) async {
+    try {
+      await FirebaseAuth.instance.signOut();
+      if (context.mounted) {
+        Navigator.of(context).pushReplacementNamed('/login');
+      }
+    } catch (e) {
+      _showMessage(context, 'Error logging out: $e');
+    }
+  }
+
+  void _showDeleteAccountDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFFDECBB7),
+          title: const Text('Delete Account'),
+          content: const Text('Are you sure you want to delete your account? This action cannot be undone.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _showMessage(context, 'Account deletion not implemented yet');
+              },
+              child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showChangePasswordDialog(BuildContext context) {
+    Navigator.of(context).pop(); // Închide Settings dialog-ul
+    showDialog(
+      context: context,
+      barrierColor: Colors.black12.withOpacity(0.5),
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.all(20),
+          child: ChangePasswordDialog(),
+        );
+      },
+    );
+  }
+
+  void _showAccountInfoDialog(BuildContext context) {
+    Navigator.of(context).pop(); // Închide Settings dialog-ul
+    showDialog(
+      context: context,
+      barrierColor: Colors.black12.withOpacity(0.5),
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.all(20),
+          child: AccountInfoDialog(),
+        );
+      },
+    );
+  }
+
+  void _showMessage(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: const Color(0xFF4B2A17),
+      ),
+    );
+  }
+}
+
+class ChangePasswordDialog extends StatefulWidget {
+  const ChangePasswordDialog({Key? key}) : super(key: key);
+
+  @override
+  _ChangePasswordDialogState createState() => _ChangePasswordDialogState();
+}
+
+class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _newPasswordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+  bool _obscureNewPassword = true;
+  bool _obscureConfirmPassword = true;
+
+  @override
+  void dispose() {
+    _newPasswordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
+  }
+
+  void _submitForm() async {
+    if (_formKey.currentState!.validate()) {
+      if (_newPasswordController.text != _confirmPasswordController.text) {
+        _showMessage('Passwords do not match');
+        return;
+      }
+
+      try {
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          await user.updatePassword(_newPasswordController.text);
+          _showMessage('Password updated successfully!');
+          Navigator.of(context).pop();
+        }
+      } catch (e) {
+        _showMessage('Error updating password: $e');
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+      child: Container(
+        width: MediaQuery.of(context).size.width * 0.98,
+        padding: const EdgeInsets.all(50),
+        decoration: BoxDecoration(
+          color: const Color(0xFFDECBB7),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.2),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Header
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.person,
+                      color: Colors.black,
+                      size: 28,
+                    ),
+                    const SizedBox(width: 16),
+                    const Text(
+                      'Account',
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black,
+                      ),
+                    ),
+                  ],
+                ),
+                GestureDetector(
+                  onTap: () => Navigator.of(context).pop(),
+                  child: const Icon(
+                    Icons.close,
+                    color: Colors.black,
+                    size: 28,
+                  ),
+                ),
+              ],
+            ),
+            const Divider(color: Colors.black26, thickness: 3),
+            const SizedBox(height: 20),
+            
+            // Title
+            const Text(
+              'Change password',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+              ),
+            ),
+            const SizedBox(height: 20),
+            
+            // Form
+            Form(
+              key: _formKey,
+              child: Column(
+                children: [
+                  _buildPasswordField(
+                    controller: _newPasswordController,
+                    label: 'New Password',
+                    obscureText: _obscureNewPassword,
+                    onToggle: () => setState(() => _obscureNewPassword = !_obscureNewPassword),
+                  ),
+                  const SizedBox(height: 20),
+                  _buildPasswordField(
+                    controller: _confirmPasswordController,
+                    label: 'Confirm Password',
+                    obscureText: _obscureConfirmPassword,
+                    onToggle: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            
+            // Confirm Button
+            Center(
+              child: SizedBox(
+                width: 200,
+                child: ElevatedButton(
+                  onPressed: _submitForm,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF4B2A17),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    elevation: 4,
+                  ),
+                  child: const Text(
+                    'Confirm',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPasswordField({
+    required TextEditingController controller,
+    required String label,
+    required bool obscureText,
+    required VoidCallback onToggle,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: Color(0xFF666666),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFFDECBB7),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.black.withOpacity(0.5), width: 3),
+          ),
+          child: TextFormField(
+            controller: controller,
+            obscureText: obscureText,
+            style: const TextStyle(fontSize: 14),
+            decoration: InputDecoration(
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+              suffixIcon: IconButton(
+                icon: Icon(
+                  obscureText ? Icons.visibility : Icons.visibility_off,
+                  color: Colors.black,
+                  size: 20,
+                ),
+                onPressed: onToggle,
+              ),
+            ),
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return 'Please enter $label';
+              }
+              if (value.length < 6) {
+                return 'Password must be at least 6 characters';
+              }
+              return null;
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: const Color(0xFF4B2A17),
+      ),
+    );
+  }
+}
+
+class AccountInfoDialog extends StatefulWidget {
+  const AccountInfoDialog({Key? key}) : super(key: key);
+
+  @override
+  _AccountInfoDialogState createState() => _AccountInfoDialogState();
+}
+
+class _AccountInfoDialogState extends State<AccountInfoDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _accountIdController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _accountIdController.dispose();
+    super.dispose();
+  }
+
+  void _loadUserData() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+        
+        if (userDoc.exists) {
+          final userData = userDoc.data()!;
+          setState(() {
+            _nameController.text = userData['fullName'] ?? '';
+            _emailController.text = userData['email'] ?? '';
+            _accountIdController.text = userData['id'] ?? '';
+          });
+        }
+      }
+    } catch (e) {
+      print('Error loading user data: $e');
+    }
+  }
+
+  void _submitForm() async {
+    if (_formKey.currentState!.validate()) {
+      try {
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .update({
+            'fullName': _nameController.text.trim(),
+            'email': _emailController.text.trim(),
+            'id': _accountIdController.text.trim(),
+          });
+          
+          _showMessage('Account information updated successfully!');
+          Navigator.of(context).pop();
+        }
+      } catch (e) {
+        _showMessage('Error updating account information: $e');
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+      child: Container(
+        width: MediaQuery.of(context).size.width * 0.98,
+        padding: const EdgeInsets.all(50),
+        decoration: BoxDecoration(
+          color: const Color(0xFFDECBB7),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.2),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Header
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.person,
+                      color: Colors.black,
+                      size: 28,
+                    ),
+                    const SizedBox(width: 16),
+                    const Text(
+                      'Account',
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black,
+                      ),
+                    ),
+                  ],
+                ),
+                GestureDetector(
+                  onTap: () => Navigator.of(context).pop(),
+                  child: const Icon(
+                    Icons.close,
+                    color: Colors.black,
+                    size: 28,
+                  ),
+                ),
+              ],
+            ),
+            const Divider(color: Colors.black26, thickness: 3),
+            const SizedBox(height: 20),
+            
+            // Title
+            const Text(
+              'Account information',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+              ),
+            ),
+            const SizedBox(height: 20),
+            
+            // Form
+            Form(
+              key: _formKey,
+              child: Column(
+                children: [
+                  _buildTextField(
+                    controller: _nameController,
+                    label: 'Name',
+                  ),
+                  const SizedBox(height: 20),
+                  _buildTextField(
+                    controller: _emailController,
+                    label: 'Email',
+                  ),
+                  const SizedBox(height: 20),
+                  _buildTextField(
+                    controller: _accountIdController,
+                    label: 'Account ID',
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            
+            // Save Button
+            Center(
+              child: SizedBox(
+                width: 200,
+                child: ElevatedButton(
+                  onPressed: _submitForm,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF4B2A17),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    elevation: 4,
+                  ),
+                  child: const Text(
+                    'Save',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: Color(0xFF666666),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFFDECBB7),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.black.withOpacity(0.5), width: 3),
+          ),
+          child: TextFormField(
+            controller: controller,
+            style: const TextStyle(fontSize: 14),
+            decoration: InputDecoration(
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            ),
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return 'Please enter $label';
+              }
+              return null;
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: const Color(0xFF4B2A17),
+      ),
     );
   }
 }
