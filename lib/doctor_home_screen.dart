@@ -1518,15 +1518,8 @@ class SettingsDialog extends StatelessWidget {
     );
   }
 
-  void _handleLogout(BuildContext context) async {
-    try {
-      await FirebaseAuth.instance.signOut();
-      if (context.mounted) {
-        Navigator.of(context).pushReplacementNamed('/login');
-      }
-    } catch (e) {
-      _showMessage(context, 'Error logging out: $e');
-    }
+  void _handleLogout(BuildContext context) {
+    _showLogoutDialog(context);
   }
 
   void _showDeleteAccountDialog(BuildContext context) {
@@ -1539,6 +1532,21 @@ class SettingsDialog extends StatelessWidget {
           backgroundColor: Colors.transparent,
           insetPadding: const EdgeInsets.all(20),
           child: DeleteAccountDialog(),
+        );
+      },
+    );
+  }
+
+  void _showLogoutDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black.withOpacity(0.5), // Fundal transparent cu blur
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.all(20),
+          child: LogoutDialog(),
         );
       },
     );
@@ -2526,5 +2534,155 @@ class _AccountInfoDialogState extends State<AccountInfoDialog> {
         backgroundColor: const Color(0xFF4B2A17),
       ),
     );
+  }
+}
+
+class LogoutDialog extends StatefulWidget {
+  const LogoutDialog({Key? key}) : super(key: key);
+
+  @override
+  State<LogoutDialog> createState() => _LogoutDialogState();
+}
+
+class _LogoutDialogState extends State<LogoutDialog> {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 200,
+      width: 350,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF5C3F28), // Fundal maro elegant
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.18),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.exit_to_app, 
+                color: Colors.white,
+                size: 26
+              ),
+              const SizedBox(width: 5),
+              const Text(
+                'Log out',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              const SizedBox(width: 87),
+              const Text(
+                'Are you sure?',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 23,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 15),
+
+          Row(
+            children: [
+              SizedBox(
+                width: 140,
+                child: ElevatedButton(
+                  onPressed: _handleLogout,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFD4A574), // Fundal auriu elegant
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    elevation: 6,
+                  ),
+                  child: const Text(
+                    'Yes',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+              
+              const Spacer(),
+
+              SizedBox(
+                width: 140,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF8B7355), // Fundal maro elegant
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    elevation: 6,
+                  ),
+                  child: const Text(
+                    'No',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _handleLogout() async {
+    print('🚪 Logout button pressed');
+    
+    try {
+      print('🔐 Signing out from Firebase Auth...');
+      await FirebaseAuth.instance.signOut();
+      print('✅ Logout successful');
+      
+      if (context.mounted) {
+        print('🔄 Navigating to splash screen...');
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => MedHiveSplashScreen()),
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      print('❌ Logout error: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error logging out: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }
