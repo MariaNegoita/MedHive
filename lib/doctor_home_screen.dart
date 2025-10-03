@@ -1,19 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:image_picker/image_picker.dart';
 import 'dart:ui'; // Import necesar pentru ImageFilter
+import 'dart:io'; // Pentru File
+import 'dart:typed_data'; // Pentru Uint8List
+import 'package:flutter/foundation.dart'; // Pentru kIsWeb
+import 'terms_and_conditions_page.dart';
+import 'splash_screen_landing_page.dart';
 
 class Patient {
   final String name;
   final String room;
   final String age;
   final String problem;
+  final String? photoUrl;
+  final String? localPhotoPath;
 
   Patient({
     this.name = "",
     this.room = "",
     this.age = "",
     this.problem = "",
+    this.photoUrl,
+    this.localPhotoPath,
   });
 
   Patient copyWith({
@@ -21,12 +32,16 @@ class Patient {
     String? room,
     String? age,
     String? problem,
+    String? photoUrl,
+    String? localPhotoPath,
   }) {
     return Patient(
       name: name ?? this.name,
       room: room ?? this.room,
       age: age ?? this.age,
       problem: problem ?? this.problem,
+      photoUrl: photoUrl ?? this.photoUrl,
+      localPhotoPath: localPhotoPath ?? this.localPhotoPath,
     );
   }
 }
@@ -44,11 +59,48 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
   List<Patient> patients = []; // Pacienții filtrați pentru afișare
   bool isLoading = true;
   int selectedTab = 0; // 0 = Home, 1 = Plus, 2 = Menu
+  final ImagePicker _picker = ImagePicker();
 
   @override
   void initState() {
     super.initState();
     _loadPatients();
+    _testFirebaseStorage();
+  }
+
+  void _testFirebaseStorage() async {
+    try {
+      print('🧪 Testing Firebase Storage connectivity...');
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        // Test simplu - încearcă să creezi o referință
+        final testRef = FirebaseStorage.instance
+            .ref()
+            .child('test')
+            .child('test.txt');
+        
+        // Încearcă să uploadezi un fișier mic de test
+        final testData = Uint8List.fromList('test'.codeUnits);
+        await testRef.putData(testData).timeout(
+          const Duration(seconds: 10),
+          onTimeout: () => throw Exception('Storage test timeout'),
+        );
+        
+        print('✅ Firebase Storage is working correctly');
+        
+        // Șterge fișierul de test
+        await testRef.delete();
+      }
+    } catch (e) {
+      print('❌ Firebase Storage test failed: $e');
+      if (e.toString().contains('storage/unauthorized')) {
+        print('⚠️ Firebase Storage rules may be too restrictive');
+      } else if (e.toString().contains('storage/unknown')) {
+        print('⚠️ Firebase Storage may not be activated');
+      } else {
+        print('⚠️ Firebase Storage connectivity issue');
+      }
+    }
   }
 
   void _filterPatients() {
@@ -67,8 +119,71 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
   }
 
   void _loadPatients() async {
+    await _loadPatientsSimple();
+  }
+
+  void _forceReloadPatients() async {
+    await _loadPatientsSimple();
+  }
+  
+  Future<void> _loadPatientsSimple() async {
     try {
-      print('🔄 Loading patients...');
+      print('🔄 Loading patients (simple query)...');
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        print('❌ No user logged in');
+        if (mounted) {
+          setState(() {
+            isLoading = false;
+          });
+        }
+        return;
+      }
+      
+      print('👤 User ID: ${user.uid}');
+
+      // Query foarte simplu - doar where doctorId
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('patients')
+          .where('doctorId', isEqualTo: user.uid)
+          .get();
+
+      print('📊 Found ${querySnapshot.docs.length} patients');
+
+      if (mounted) {
+        setState(() {
+          allPatients = querySnapshot.docs.map((doc) {
+            final data = doc.data();
+            print('📋 Patient data: $data');
+            return Patient(
+              name: '${data['firstName'] ?? ''} ${data['lastName'] ?? ''}'.trim(),
+              room: data['room'] ?? '',
+              age: data['age']?.toString() ?? '',
+              problem: data['symptoms'] ?? '',
+              photoUrl: data['photoUrl'],
+            );
+          }).toList();
+          
+          // Filtrează pacienții în funcție de searchText
+          _filterPatients();
+          isLoading = false;
+        });
+      }
+      
+      print('✅ Loaded ${patients.length} patients');
+    } catch (e) {
+      print('❌ Error loading patients: $e');
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadPatientsWithOptions(bool forceRefresh) async {
+    try {
+      print('🔄 Loading patients... (force refresh: $forceRefresh)');
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         print('❌ No user logged in');
@@ -90,14 +205,27 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
       setState(() {
         allPatients = querySnapshot.docs.map((doc) {
           final data = doc.data();
+          print('📋 Patient document ID: ${doc.id}');
           print('📋 Patient data: $data');
-          return Patient(
+          print('📋 PhotoUrl from Firestore: ${data['photoUrl']}');
+          print('📋 PhotoUrl type: ${data['photoUrl'].runtimeType}');
+          
+          final patient = Patient(
             name: '${data['firstName'] ?? ''} ${data['lastName'] ?? ''}'.trim(),
             room: data['room'] ?? '',
             age: data['age']?.toString() ?? '',
             problem: data['symptoms'] ?? '',
+            photoUrl: data['photoUrl'],
           );
+          
+          print('📋 Created patient with photoUrl: ${patient.photoUrl}');
+          return patient;
         }).toList();
+        
+        print('📊 Total patients loaded: ${allPatients.length}');
+        for (int i = 0; i < allPatients.length; i++) {
+          print('📊 Patient $i: ${allPatients[i].name} - Photo: ${allPatients[i].photoUrl}');
+        }
         
         // Filtrează pacienții în funcție de searchText
         _filterPatients();
@@ -123,7 +251,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
           insetPadding: const EdgeInsets.all(20),
           child: PatientFormDialog(
             onPatientAdded: () {
-              _loadPatients();
+              _forceReloadPatients();
               setState(() {
                 selectedTab = 0; // Reset to Home when form closes
               });
@@ -181,19 +309,19 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
             children: [
               Column(
                 children: [
+                  const SizedBox(height: 20), // Spațiu de sus
                   // App Icon
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.only(top: 60, bottom: 30),
-                    child: Center(
+                  ClipRect(
+                    child: Align(
+                      alignment: Alignment.center,
+                      heightFactor: 0.6, // Taie 40% total (de 2 ori mai mult)
                       child: Container(
-                        width: 160,
-                        height: 160,
+                        transform: Matrix4.translationValues(0, -10, 0), // Mută mai mult în sus
                         child: Image.asset(
                           'assets/images/logo.png',
-                          width: 160,
-                          height: 160,
-                          fit: BoxFit.cover,
+                          width: 400,
+                          height: 300,
+                          fit: BoxFit.contain,
                         ),
                       ),
                     ),
@@ -232,26 +360,40 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                             ),
                           ),
                           const SizedBox(width: 12),
-                          GestureDetector(
-                            onTap: () {
-                              // Reîncarcă din Firebase și filtrează din nou
-                              _loadPatients();
-                            },
-                            child: const Icon(
-                              Icons.search,
-                              color: Color(0xFFD2B48C),
-                              size: 24,
-                            ),
+                          Row(
+                            children: [
+                              GestureDetector(
+                                onTap: () {
+                                  // Reîncarcă din Firebase și filtrează din nou
+                                  print('🔄 Manual refresh triggered');
+                                  _forceReloadPatients();
+                                },
+                                child: const Icon(
+                                  Icons.refresh,
+                                  color: Color(0xFFD2B48C),
+                                  size: 24,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              GestureDetector(
+                                onTap: () {
+                                  // Reîncarcă din Firebase și filtrează din nou
+                                  _loadPatients();
+                                },
+                                child: const Icon(
+                                  Icons.search,
+                                  color: Color(0xFFD2B48C),
+                                  size: 24,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
                     ),
                   ),
 
-                  const SizedBox(height: 40),
-
-
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 15),
 
                   // Patient Cards
                   Expanded(
@@ -456,9 +598,6 @@ class PatientCard extends StatelessWidget {
             width: 80,
             height: 80,
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFFF0F0F0), Color(0xFFD8D8D8), Color(0xFFC8C8C8)],
-              ),
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
@@ -468,6 +607,83 @@ class PatientCard extends StatelessWidget {
                 ),
               ],
               border: Border.all(color: Colors.black.withOpacity(0.05), width: 1),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Builder(
+                builder: (context) {
+                  print('🖼️ Rendering image for patient: ${patient.name}');
+                  print('🖼️ PhotoUrl: ${patient.photoUrl}');
+                  print('🖼️ PhotoUrl is null: ${patient.photoUrl == null}');
+                  print('🖼️ PhotoUrl is empty: ${patient.photoUrl?.isEmpty}');
+                  
+                  if (patient.photoUrl != null && patient.photoUrl!.isNotEmpty) {
+                    print('🖼️ Attempting to load image from: ${patient.photoUrl}');
+                    print('🖼️ URL length: ${patient.photoUrl!.length}');
+                    print('🖼️ URL starts with https: ${patient.photoUrl!.startsWith('https')}');
+                    return Image.network(
+                      patient.photoUrl!,
+                      width: 80,
+                      height: 80,
+                      fit: BoxFit.cover,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) {
+                          print('🖼️ Image loaded successfully');
+                          return child;
+                        }
+                        print('🖼️ Loading image... ${loadingProgress.cumulativeBytesLoaded}/${loadingProgress.expectedTotalBytes}');
+                        return Container(
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [Color(0xFFF0F0F0), Color(0xFFD8D8D8)],
+                            ),
+                          ),
+                          child: const Center(
+                            child: CircularProgressIndicator(
+                              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4B2A17)),
+                              strokeWidth: 2,
+                            ),
+                          ),
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) {
+                        print('❌ Error loading image from ${patient.photoUrl}: $error');
+                        print('❌ Stack trace: $stackTrace');
+                        return Container(
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [Color(0xFFF0F0F0), Color(0xFFD8D8D8), Color(0xFFC8C8C8)],
+                            ),
+                          ),
+                          child: const Center(
+                            child: Icon(
+                              Icons.broken_image,
+                              color: Color(0xFF4B2A17),
+                              size: 30,
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  } else {
+                    print('🖼️ No photo URL available, showing default icon');
+                    return Container(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Color(0xFFF0F0F0), Color(0xFFD8D8D8), Color(0xFFC8C8C8)],
+                        ),
+                      ),
+                      child: const Center(
+                        child: Icon(
+                          Icons.person,
+                          color: Color(0xFF4B2A17),
+                          size: 40,
+                        ),
+                      ),
+                    );
+                  }
+                },
+              ),
             ),
           ),
         ],
@@ -612,6 +828,10 @@ class _PatientFormDialogState extends State<PatientFormDialog> {
   final TextEditingController _ageController = TextEditingController();
   final TextEditingController _roomController = TextEditingController();
   final TextEditingController _symptomsController = TextEditingController();
+  final ImagePicker _picker = ImagePicker();
+  String? _selectedImagePath;
+  String _photoText = "Choose Photo";
+  bool _isSubmitting = false;
 
   @override
   void dispose() {
@@ -624,7 +844,15 @@ class _PatientFormDialogState extends State<PatientFormDialog> {
   }
 
   void _submitForm() async {
+    if (_isSubmitting) return; // Prevent multiple submissions
+    
     if (_formKey.currentState!.validate()) {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = true;
+        });
+      }
+      
       try {
         print('💾 Saving patient...');
         // Get current user
@@ -637,24 +865,62 @@ class _PatientFormDialogState extends State<PatientFormDialog> {
               backgroundColor: Colors.red,
             ),
           );
+          setState(() {
+            _isSubmitting = false;
+          });
           return;
         }
 
         print('👤 Doctor ID: ${user.uid}');
         print('📝 Patient data: ${_firstNameController.text}, ${_lastNameController.text}');
 
+        String? photoUrl;
+        
+        // Upload photo if selected
+        if (_selectedImagePath != null) {
+          print('📸 Photo selected but Firebase Storage requires paid plan');
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Photo upload requires Firebase Blaze plan - upgrade billing to enable photos'),
+                backgroundColor: Colors.blue,
+                duration: Duration(seconds: 4),
+              ),
+            );
+          }
+          
+          // Firebase Storage necesită plan plătit
+          print('📸 Photo upload skipped - Storage requires Blaze plan');
+        }
+
         // Save patient to Firestore
-        final docRef = await FirebaseFirestore.instance.collection('patients').add({
+        final patientData = {
           'firstName': _firstNameController.text.trim(),
           'lastName': _lastNameController.text.trim(),
           'age': int.parse(_ageController.text.trim()),
           'room': _roomController.text.trim(),
           'symptoms': _symptomsController.text.trim(),
           'doctorId': user.uid,
+          'photoUrl': photoUrl,
           'createdAt': FieldValue.serverTimestamp(),
-        });
+        };
+        
+        print('💾 Saving patient data to Firestore: $patientData');
+        
+        final docRef = await FirebaseFirestore.instance.collection('patients').add(patientData);
 
         print('✅ Patient saved with ID: ${docRef.id}');
+        
+        // Verifică că datele au fost salvate corect
+        final savedDoc = await docRef.get();
+        if (savedDoc.exists) {
+          final savedData = savedDoc.data();
+          print('🔍 Verification - Saved data: $savedData');
+          print('🔍 PhotoUrl in saved data: ${savedData?['photoUrl']}');
+        } else {
+          print('❌ Document was not saved properly');
+        }
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -669,20 +935,51 @@ class _PatientFormDialogState extends State<PatientFormDialog> {
         _ageController.clear();
         _roomController.clear();
         _symptomsController.clear();
+        if (mounted) {
+          setState(() {
+            _selectedImagePath = null;
+            _photoText = "Choose Photo";
+            _isSubmitting = false;
+          });
+        }
 
         Navigator.of(context).pop();
         
-        // Reload patients list and reset to Home
+        // Forțează reîncărcarea listei de pacienți
+        print('🔄 Forcing patient list reload...');
         if (widget.onPatientAdded != null) {
           widget.onPatientAdded!();
         }
+        
+        // Adaugă un delay pentru a permite Firebase să proceseze datele
+        await Future.delayed(const Duration(milliseconds: 500));
+        
+        // Verifică din nou dacă pacientul a fost salvat
+        final verifySnapshot = await FirebaseFirestore.instance
+            .collection('patients')
+            .where('doctorId', isEqualTo: user.uid)
+            .limit(1)
+            .get();
+            
+        if (verifySnapshot.docs.isNotEmpty) {
+          final latestPatient = verifySnapshot.docs.first.data();
+          print('🔍 Latest patient in database: $latestPatient');
+          print('🔍 Latest patient photo: ${latestPatient['photoUrl']}');
+        } else {
+          print('❌ No patients found after save');
+        }
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error adding patient: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        if (mounted) {
+          setState(() {
+            _isSubmitting = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error adding patient: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     }
   }
@@ -785,6 +1082,8 @@ class _PatientFormDialogState extends State<PatientFormDialog> {
                     return null;
                   },
                 ),
+                const SizedBox(height: 16),
+                _buildPhotoField(),
                 const SizedBox(height: 24),
                 Row(
                   children: [
@@ -810,18 +1109,37 @@ class _PatientFormDialogState extends State<PatientFormDialog> {
                     const SizedBox(width: 16),
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: _submitForm,
+                        onPressed: _isSubmitting ? null : _submitForm,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.black,
+                          backgroundColor: _isSubmitting ? Colors.grey : Colors.black,
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),
                         ),
-                        child: const Text(
-                          'Submit',
-                          style: TextStyle(fontSize: 16, color: Color(0xFFDECBB7)),
-                        ),
+                        child: _isSubmitting
+                            ? const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                    ),
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Saving...',
+                                    style: TextStyle(fontSize: 16, color: Colors.white),
+                                  ),
+                                ],
+                              )
+                            : const Text(
+                                'Submit',
+                                style: TextStyle(fontSize: 16, color: Color(0xFFDECBB7)),
+                              ),
                       ),
                     ),
                   ],
@@ -862,6 +1180,164 @@ class _PatientFormDialogState extends State<PatientFormDialog> {
       ),
       validator: validator,
     );
+  }
+
+  Widget _buildPhotoField() {
+    return GestureDetector(
+      onTap: _showImagePicker,
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.black),
+          borderRadius: BorderRadius.circular(10),
+          color: const Color(0xFFDECBB7),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.camera_alt,
+                color: Colors.black,
+                size: 20,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  _photoText,
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: _selectedImagePath != null ? Colors.black87 : Colors.black54,
+                  ),
+                ),
+              ),
+              if (_selectedImagePath != null)
+                const Icon(
+                  Icons.check_circle,
+                  color: Colors.green,
+                  size: 20,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showImagePicker() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFFDECBB7),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (BuildContext context) {
+        return SafeArea(
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_library, color: Color(0xFF4B2A17)),
+                title: const Text('Choose from Gallery'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickImage(ImageSource.gallery);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_camera, color: Color(0xFF4B2A17)),
+                title: const Text('Take Photo'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickImage(ImageSource.camera);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final XFile? pickedFile = await _picker.pickImage(
+        source: source,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 85,
+      );
+
+      if (pickedFile != null) {
+        setState(() {
+          _selectedImagePath = pickedFile.path;
+          _photoText = 'Photo Selected';
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error picking image: $e'),
+          backgroundColor: const Color(0xFF4B2A17),
+        ),
+      );
+    }
+  }
+
+  Future<String?> _uploadPhoto(String imagePath) async {
+    try {
+      print('🔄 Starting simple photo upload...');
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        print('❌ No user authenticated');
+        return null;
+      }
+
+      // Citește fișierul
+      final xFile = XFile(imagePath);
+      final bytes = await xFile.readAsBytes();
+      print('📄 File read: ${bytes.length} bytes');
+      
+      if (bytes.isEmpty) {
+        throw Exception('Empty file');
+      }
+
+      // Upload simplu fără monitoring
+      final fileName = 'patient_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final reference = FirebaseStorage.instance
+          .ref()
+          .child('patient_photos')
+          .child(user.uid)
+          .child(fileName);
+
+      print('📤 Uploading to Firebase Storage...');
+      
+      // Upload direct fără timeout complicat
+      final uploadTask = reference.putData(
+        bytes,
+        SettableMetadata(contentType: 'image/jpeg'),
+      );
+      
+      // Așteaptă să se termine
+      final snapshot = await uploadTask;
+      
+      print('✅ Upload completed, getting URL...');
+      final downloadUrl = await snapshot.ref.getDownloadURL();
+      print('✅ Photo URL: $downloadUrl');
+      
+      return downloadUrl;
+    } catch (e) {
+      print('❌ Upload error: $e');
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Photo upload failed: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+      return null;
+    }
   }
 }
 
@@ -942,7 +1418,7 @@ class SettingsDialog extends StatelessWidget {
             _buildMenuItem(
               icon: Icons.description,
               title: 'Terms & Conditions',
-              onTap: () => _showMessage(context, 'Terms & Conditions tapped'),
+              onTap: () => _showTermsAndConditions(context),
               hasArrow: false,
             ),
             const Divider(color: Colors.black26, thickness: 3),
@@ -1056,24 +1532,13 @@ class SettingsDialog extends StatelessWidget {
   void _showDeleteAccountDialog(BuildContext context) {
     showDialog(
       context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black.withOpacity(0.5), // Fundal transparent cu blur
       builder: (BuildContext context) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFFDECBB7),
-          title: const Text('Delete Account'),
-          content: const Text('Are you sure you want to delete your account? This action cannot be undone.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                _showMessage(context, 'Account deletion not implemented yet');
-              },
-              child: const Text('Delete', style: TextStyle(color: Colors.red)),
-            ),
-          ],
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.all(20),
+          child: DeleteAccountDialog(),
         );
       },
     );
@@ -1109,11 +1574,331 @@ class SettingsDialog extends StatelessWidget {
     );
   }
 
+  void _showTermsAndConditions(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return const TermsAndConditionsPage();
+      },
+    );
+  }
+
   void _showMessage(BuildContext context, String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
         backgroundColor: const Color(0xFF4B2A17),
+      ),
+    );
+  }
+
+}
+
+class DeleteAccountDialog extends StatefulWidget {
+  const DeleteAccountDialog({Key? key}) : super(key: key);
+
+  @override
+  State<DeleteAccountDialog> createState() => _DeleteAccountDialogState();
+}
+
+class _DeleteAccountDialogState extends State<DeleteAccountDialog> {
+  final TextEditingController _passwordController = TextEditingController();
+  bool _obscurePassword = true;
+
+  @override
+  void dispose() {
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  void _handleDeleteAccount() async {
+    print('🗑️ Delete account button pressed');
+    
+    if (_passwordController.text.isEmpty) {
+      print('❌ Password field is empty');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter your password'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    print('🔑 Password provided: ${_passwordController.text.length} characters');
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        print('👤 Current user: ${user.email}');
+        
+        // Verifică parola prin re-autentificare
+        print('🔐 Attempting re-authentication...');
+        final credential = EmailAuthProvider.credential(
+          email: user.email!,
+          password: _passwordController.text,
+        );
+        
+        await user.reauthenticateWithCredential(credential);
+        print('✅ Re-authentication successful');
+        
+        // Dacă re-autentificarea reușește, șterge contul
+        print('🗂️ Deleting user document from Firestore...');
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .delete();
+        print('✅ User document deleted');
+        
+        // Șterge toate pacienții asociați cu acest doctor
+        print('👥 Deleting associated patients...');
+        final patientsQuery = await FirebaseFirestore.instance
+            .collection('patients')
+            .where('doctorId', isEqualTo: user.uid)
+            .get();
+        
+        print('📊 Found ${patientsQuery.docs.length} patients to delete');
+        for (var doc in patientsQuery.docs) {
+          await doc.reference.delete();
+        }
+        print('✅ All patients deleted');
+        
+        // Șterge contul Firebase Auth
+        print('🔥 Deleting Firebase Auth user...');
+        await user.delete();
+        print('✅ Firebase Auth user deleted');
+        
+        // Afișează mesaj de succes
+        print('🎉 Account deletion completed successfully');
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Account deleted successfully'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+          
+          // Navighează la splash screen după un delay scurt
+          print('🔄 Navigating to splash screen...');
+          Future.delayed(const Duration(seconds: 2), () {
+            if (context.mounted) {
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (context) => MedHiveSplashScreen()),
+                (route) => false,
+              );
+            }
+          });
+        }
+      } else {
+        print('❌ No current user found');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No user logged in'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      print('❌ Firebase Auth Error: ${e.code} - ${e.message}');
+      if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Incorrect password'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.message}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      print('❌ General Error: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error deleting account: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 280,
+      width: 350,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF5C3F28), // Fundal maro mai deschis elegant
+        borderRadius: BorderRadius.circular(25),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.4),
+            blurRadius: 25,
+            offset: const Offset(0, 15),
+          ),
+          BoxShadow(
+            color: Colors.white.withOpacity(0.1),
+            blurRadius: 5,
+            offset: const Offset(0, -2),
+          ),
+        ],
+        border: Border.all(
+          color: Colors.white.withOpacity(0.2),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.person_off, 
+                color: Colors.white, // Alb complet vizibil
+                size: 26
+              ),
+              const SizedBox(width: 5),
+              const Text(
+                'Delete account',
+                style: TextStyle(
+                  color: Colors.white, // Alb complet vizibil
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              const SizedBox(width: 87),
+              const Text(
+                'Are you sure?',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white, // Alb complet vizibil
+                  fontSize: 23,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 20),
+
+          // Câmpul pentru parolă
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.3),
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: TextField(
+              controller: _passwordController,
+              obscureText: _obscurePassword,
+              textAlignVertical: TextAlignVertical.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+              ),
+              decoration: InputDecoration(
+                hintText: 'Enter your password',
+                hintStyle: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 14,
+                ),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _obscurePassword ? Icons.visibility : Icons.visibility_off,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _obscurePassword = !_obscurePassword;
+                    });
+                  },
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          Row(
+            children: [
+              SizedBox(
+                width: 140,
+                child: ElevatedButton(
+                  onPressed: _handleDeleteAccount,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFD4A574), // Fundal auriu elegant
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    elevation: 6,
+                    shadowColor: Colors.black.withOpacity(0.3),
+                  ),
+                  child: const Text(
+                    'Yes',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+              
+              const Spacer(),
+
+              SizedBox(
+                width: 140,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF8B7355), // Fundal maro elegant
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    elevation: 6,
+                    shadowColor: Colors.black.withOpacity(0.3),
+                  ),
+                  child: const Text(
+                    'No',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -1128,13 +1913,16 @@ class ChangePasswordDialog extends StatefulWidget {
 
 class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
   final _formKey = GlobalKey<FormState>();
+  final _oldPasswordController = TextEditingController();
   final _newPasswordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  bool _obscureOldPassword = true;
   bool _obscureNewPassword = true;
   bool _obscureConfirmPassword = true;
 
   @override
   void dispose() {
+    _oldPasswordController.dispose();
     _newPasswordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
@@ -1143,16 +1931,37 @@ class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
   void _submitForm() async {
     if (_formKey.currentState!.validate()) {
       if (_newPasswordController.text != _confirmPasswordController.text) {
-        _showMessage('Passwords do not match');
+        _showMessage('New passwords do not match');
         return;
       }
 
       try {
         final user = FirebaseAuth.instance.currentUser;
         if (user != null) {
+          // Verifică parola veche prin re-autentificare
+          final credential = EmailAuthProvider.credential(
+            email: user.email!,
+            password: _oldPasswordController.text,
+          );
+          
+          await user.reauthenticateWithCredential(credential);
+          
+          // Dacă re-autentificarea reușește, schimbă parola
           await user.updatePassword(_newPasswordController.text);
-          _showMessage('Password updated successfully!');
+          
+          // Închide dialog-ul de schimbare parolă
           Navigator.of(context).pop();
+          
+          // Afișează dialog-ul de succes
+          _showPasswordChangeSuccessDialog();
+        }
+      } on FirebaseAuthException catch (e) {
+        if (e.code == 'wrong-password') {
+          _showMessage('Current password is incorrect');
+        } else if (e.code == 'invalid-credential') {
+          _showMessage('Current password is incorrect');
+        } else {
+          _showMessage('Error updating password: ${e.message}');
         }
       } catch (e) {
         _showMessage('Error updating password: $e');
@@ -1234,6 +2043,13 @@ class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
               child: Column(
                 children: [
                   _buildPasswordField(
+                    controller: _oldPasswordController,
+                    label: 'Current Password',
+                    obscureText: _obscureOldPassword,
+                    onToggle: () => setState(() => _obscureOldPassword = !_obscureOldPassword),
+                  ),
+                  const SizedBox(height: 20),
+                  _buildPasswordField(
                     controller: _newPasswordController,
                     label: 'New Password',
                     obscureText: _obscureNewPassword,
@@ -1242,7 +2058,7 @@ class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
                   const SizedBox(height: 20),
                   _buildPasswordField(
                     controller: _confirmPasswordController,
-                    label: 'Confirm Password',
+                    label: 'Confirm New Password',
                     obscureText: _obscureConfirmPassword,
                     onToggle: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
                   ),
@@ -1345,6 +2161,106 @@ class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
       ),
     );
   }
+
+  void _showPasswordChangeSuccessDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.all(20),
+          child: Container(
+            padding: const EdgeInsets.all(30),
+            decoration: BoxDecoration(
+              color: const Color(0xFFDECBB7),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Icon de succes
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: Colors.green,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.green.withOpacity(0.3),
+                        blurRadius: 15,
+                        offset: const Offset(0, 5),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.check,
+                    color: Colors.white,
+                    size: 50,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                
+                // Mesaj de succes
+                const Text(
+                  'Password changed successfully!',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 10),
+                
+                const Text(
+                  'Your password has been updated.',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF666666),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 25),
+                
+                // Buton Close
+                SizedBox(
+                  width: 150,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF4B2A17),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      elevation: 4,
+                    ),
+                    child: const Text(
+                      'CLOSE',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
 
 class AccountInfoDialog extends StatefulWidget {
@@ -1359,6 +2275,7 @@ class _AccountInfoDialogState extends State<AccountInfoDialog> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _accountIdController = TextEditingController();
+  final _uidController = TextEditingController();
 
   @override
   void initState() {
@@ -1371,6 +2288,7 @@ class _AccountInfoDialogState extends State<AccountInfoDialog> {
     _nameController.dispose();
     _emailController.dispose();
     _accountIdController.dispose();
+    _uidController.dispose();
     super.dispose();
   }
 
@@ -1378,6 +2296,10 @@ class _AccountInfoDialogState extends State<AccountInfoDialog> {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
+        print('👤 Loading user data for: ${user.uid}');
+        print('👤 User email from Auth: ${user.email}');
+        
+        // Încearcă să încarce din Firestore
         final userDoc = await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
@@ -1385,40 +2307,39 @@ class _AccountInfoDialogState extends State<AccountInfoDialog> {
         
         if (userDoc.exists) {
           final userData = userDoc.data()!;
+          print('📋 User data from Firestore: $userData');
           setState(() {
-            _nameController.text = userData['fullName'] ?? '';
-            _emailController.text = userData['email'] ?? '';
-            _accountIdController.text = userData['id'] ?? '';
+            _nameController.text = userData['fullName'] ?? 'N/A';
+            _emailController.text = userData['email'] ?? user.email ?? 'N/A';
+            _accountIdController.text = userData['id'] ?? 'N/A';
+            _uidController.text = user.uid;
+          });
+        } else {
+          print('⚠️ No Firestore document found, using Auth data');
+          // Fallback la datele din Firebase Auth
+          setState(() {
+            _nameController.text = user.displayName ?? 'N/A';
+            _emailController.text = user.email ?? 'N/A';
+            _accountIdController.text = 'N/A';
+            _uidController.text = user.uid;
           });
         }
       }
     } catch (e) {
-      print('Error loading user data: $e');
-    }
-  }
-
-  void _submitForm() async {
-    if (_formKey.currentState!.validate()) {
-      try {
-        final user = FirebaseAuth.instance.currentUser;
-        if (user != null) {
-          await FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .update({
-            'fullName': _nameController.text.trim(),
-            'email': _emailController.text.trim(),
-            'id': _accountIdController.text.trim(),
-          });
-          
-          _showMessage('Account information updated successfully!');
-          Navigator.of(context).pop();
-        }
-      } catch (e) {
-        _showMessage('Error updating account information: $e');
+      print('❌ Error loading user data: $e');
+      // Fallback la datele din Firebase Auth în caz de eroare
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        setState(() {
+          _nameController.text = user.displayName ?? 'N/A';
+          _emailController.text = user.email ?? 'N/A';
+          _accountIdController.text = 'N/A';
+          _uidController.text = user.uid;
+        });
       }
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -1496,28 +2417,37 @@ class _AccountInfoDialogState extends State<AccountInfoDialog> {
                   _buildTextField(
                     controller: _nameController,
                     label: 'Name',
+                    isReadOnly: true,
                   ),
                   const SizedBox(height: 20),
                   _buildTextField(
                     controller: _emailController,
                     label: 'Email',
+                    isReadOnly: true,
                   ),
                   const SizedBox(height: 20),
                   _buildTextField(
                     controller: _accountIdController,
                     label: 'Account ID',
+                    isReadOnly: true,
+                  ),
+                  const SizedBox(height: 20),
+                  _buildTextField(
+                    controller: _uidController,
+                    label: 'User ID (UID)',
+                    isReadOnly: true,
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 24),
             
-            // Save Button
+            // Close Button
             Center(
               child: SizedBox(
                 width: 200,
                 child: ElevatedButton(
-                  onPressed: _submitForm,
+                  onPressed: () => Navigator.of(context).pop(),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF4B2A17),
                     padding: const EdgeInsets.symmetric(vertical: 12),
@@ -1527,7 +2457,7 @@ class _AccountInfoDialogState extends State<AccountInfoDialog> {
                     elevation: 4,
                   ),
                   child: const Text(
-                    'Save',
+                    'Close',
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.white,
@@ -1546,6 +2476,7 @@ class _AccountInfoDialogState extends State<AccountInfoDialog> {
   Widget _buildTextField({
     required TextEditingController controller,
     required String label,
+    bool isReadOnly = false,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1567,12 +2498,16 @@ class _AccountInfoDialogState extends State<AccountInfoDialog> {
           ),
           child: TextFormField(
             controller: controller,
-            style: const TextStyle(fontSize: 14),
+            readOnly: isReadOnly,
+            style: TextStyle(
+              fontSize: 14,
+              color: isReadOnly ? Colors.grey[600] : Colors.black,
+            ),
             decoration: InputDecoration(
               border: InputBorder.none,
               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
             ),
-            validator: (value) {
+            validator: isReadOnly ? null : (value) {
               if (value == null || value.isEmpty) {
                 return 'Please enter $label';
               }
