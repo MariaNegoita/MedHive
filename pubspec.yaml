@@ -18,6 +18,7 @@ dependencies:
   cloud_firestore: ^5.4.4
   image_picker: ^1.0.4
   firebase_storage: ^12.4.10
+  url_launcher: ^6.2.2
 
   # Add other dependencies here
 

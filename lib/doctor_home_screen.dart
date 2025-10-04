@@ -8,6 +8,7 @@ import 'dart:io'; // Pentru File
 import 'dart:typed_data'; // Pentru Uint8List
 import 'package:flutter/foundation.dart'; // Pentru kIsWeb
 import 'terms_and_conditions_page.dart';
+import 'feedback_page.dart';
 import 'splash_screen_landing_page.dart';
 
 class Patient {
@@ -1440,7 +1441,7 @@ class SettingsDialog extends StatelessWidget {
             _buildMenuItem(
               icon: Icons.sentiment_satisfied_alt,
               title: 'Feedback',
-              onTap: () => _showMessage(context, 'Feedback tapped'),
+              onTap: () => _showFeedbackPage(context),
               hasArrow: false,
             ),
           ],
@@ -1596,6 +1597,15 @@ class SettingsDialog extends StatelessWidget {
       SnackBar(
         content: Text(message),
         backgroundColor: const Color(0xFF4B2A17),
+      ),
+    );
+  }
+
+  void _showFeedbackPage(BuildContext context) {
+    Navigator.of(context).pop(); // Închide Settings dialog-ul
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const FeedbackPage(),
       ),
     );
   }
