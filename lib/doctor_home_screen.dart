@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:ui'; // Import necesar pentru ImageFilter
 import 'dart:io'; // Pentru File
 import 'dart:typed_data'; // Pentru Uint8List
+import 'dart:convert'; // Pentru base64
 import 'package:flutter/foundation.dart'; // Pentru kIsWeb
 import 'terms_and_conditions_page.dart';
 import 'feedback_page.dart';
@@ -619,53 +620,65 @@ class PatientCard extends StatelessWidget {
                   print('🖼️ PhotoUrl is empty: ${patient.photoUrl?.isEmpty}');
                   
                   if (patient.photoUrl != null && patient.photoUrl!.isNotEmpty) {
-                    print('🖼️ Attempting to load image from: ${patient.photoUrl}');
-                    print('🖼️ URL length: ${patient.photoUrl!.length}');
-                    print('🖼️ URL starts with https: ${patient.photoUrl!.startsWith('https')}');
-                    return Image.network(
-                      patient.photoUrl!,
-                      width: 80,
-                      height: 80,
-                      fit: BoxFit.cover,
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) {
-                          print('🖼️ Image loaded successfully');
-                          return child;
-                        }
-                        print('🖼️ Loading image... ${loadingProgress.cumulativeBytesLoaded}/${loadingProgress.expectedTotalBytes}');
-                        return Container(
-                          decoration: const BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [Color(0xFFF0F0F0), Color(0xFFD8D8D8)],
+                    print('🖼️ Loading image: ${patient.photoUrl!.substring(0, 50)}...');
+                    
+                    // Check if it's base64 or Firebase URL
+                    if (patient.photoUrl!.startsWith('data:image/')) {
+                      // Base64 image - use Image.memory
+                      print('📁 Loading base64 image');
+                      final base64String = patient.photoUrl!.split(',')[1];
+                      final bytes = base64Decode(base64String);
+                      
+                      return Image.memory(
+                        bytes,
+                        width: 80,
+                        height: 80,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          print('❌ Error loading base64 image: $error');
+                          return Container(
+                            width: 80,
+                            height: 80,
+                            decoration: const BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [Color(0xFFF0F0F0), Color(0xFFD8D8D8)],
+                              ),
                             ),
-                          ),
-                          child: const Center(
-                            child: CircularProgressIndicator(
-                              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4B2A17)),
-                              strokeWidth: 2,
-                            ),
-                          ),
-                        );
-                      },
-                      errorBuilder: (context, error, stackTrace) {
-                        print('❌ Error loading image from ${patient.photoUrl}: $error');
-                        print('❌ Stack trace: $stackTrace');
-                        return Container(
-                          decoration: const BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [Color(0xFFF0F0F0), Color(0xFFD8D8D8), Color(0xFFC8C8C8)],
-                            ),
-                          ),
-                          child: const Center(
-                            child: Icon(
+                            child: const Icon(
                               Icons.broken_image,
                               color: Color(0xFF4B2A17),
                               size: 30,
                             ),
-                          ),
-                        );
-                      },
-                    );
+                          );
+                        },
+                      );
+                    } else {
+                      // Firebase URL - use Image.network
+                      print('🌐 Loading Firebase URL');
+                      return Image.network(
+                        patient.photoUrl!,
+                        width: 80,
+                        height: 80,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          print('❌ Error loading Firebase image: $error');
+                          return Container(
+                            width: 80,
+                            height: 80,
+                            decoration: const BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [Color(0xFFF0F0F0), Color(0xFFD8D8D8)],
+                              ),
+                            ),
+                            child: const Icon(
+                              Icons.broken_image,
+                              color: Color(0xFF4B2A17),
+                              size: 30,
+                            ),
+                          );
+                        },
+                      );
+                    }
                   } else {
                     print('🖼️ No photo URL available, showing default icon');
                     return Container(
@@ -879,20 +892,29 @@ class _PatientFormDialogState extends State<PatientFormDialog> {
         
         // Upload photo if selected
         if (_selectedImagePath != null) {
-          print('📸 Photo selected but Firebase Storage requires paid plan');
+          print('📸 Photo selected, converting to base64...');
           
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Photo upload requires Firebase Blaze plan - upgrade billing to enable photos'),
-                backgroundColor: Colors.blue,
-                duration: Duration(seconds: 4),
-              ),
-            );
+          try {
+            // Convert image to base64 for web compatibility
+            final xFile = XFile(_selectedImagePath!);
+            final bytes = await xFile.readAsBytes();
+            final base64String = base64Encode(bytes);
+            photoUrl = 'data:image/jpeg;base64,$base64String';
+            
+            print('✅ Photo converted to base64 successfully');
+            print('📊 Base64 length: ${base64String.length} characters');
+          } catch (e) {
+            print('❌ Photo conversion error: $e');
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Photo conversion failed: $e'),
+                  backgroundColor: Colors.orange,
+                  duration: const Duration(seconds: 3),
+                ),
+              );
+            }
           }
-          
-          // Firebase Storage necesită plan plătit
-          print('📸 Photo upload skipped - Storage requires Blaze plan');
         }
 
         // Save patient to Firestore
@@ -1285,12 +1307,15 @@ class _PatientFormDialogState extends State<PatientFormDialog> {
 
   Future<String?> _uploadPhoto(String imagePath) async {
     try {
-      print('🔄 Starting simple photo upload...');
+      print('🔄 Starting photo upload...');
+      print('📁 Image path: $imagePath');
+      
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         print('❌ No user authenticated');
         return null;
       }
+      print('👤 User ID: ${user.uid}');
 
       // Citește fișierul
       final xFile = XFile(imagePath);
@@ -1301,8 +1326,11 @@ class _PatientFormDialogState extends State<PatientFormDialog> {
         throw Exception('Empty file');
       }
 
-      // Upload simplu fără monitoring
+      // Creează numele fișierului
       final fileName = 'patient_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      print('📝 File name: $fileName');
+      
+      // Creează referința
       final reference = FirebaseStorage.instance
           .ref()
           .child('patient_photos')
@@ -1310,23 +1338,44 @@ class _PatientFormDialogState extends State<PatientFormDialog> {
           .child(fileName);
 
       print('📤 Uploading to Firebase Storage...');
+      print('📤 Full path: ${reference.fullPath}');
       
-      // Upload direct fără timeout complicat
+      // Upload cu debugging
       final uploadTask = reference.putData(
         bytes,
-        SettableMetadata(contentType: 'image/jpeg'),
+        SettableMetadata(
+          contentType: 'image/jpeg',
+          customMetadata: {
+            'uploadedBy': user.uid,
+            'uploadedAt': DateTime.now().toIso8601String(),
+          },
+        ),
       );
+      
+      // Monitorizează progresul
+      uploadTask.snapshotEvents.listen((snapshot) {
+        print('📊 Upload progress: ${snapshot.bytesTransferred}/${snapshot.totalBytes}');
+      });
       
       // Așteaptă să se termine
       final snapshot = await uploadTask;
+      print('✅ Upload completed successfully');
+      print('📊 Final bytes: ${snapshot.totalBytes}');
       
-      print('✅ Upload completed, getting URL...');
+      // Obține URL-ul
+      print('🔗 Getting download URL...');
       final downloadUrl = await snapshot.ref.getDownloadURL();
       print('✅ Photo URL: $downloadUrl');
+      
+      // Verifică că URL-ul este valid
+      if (downloadUrl.isEmpty) {
+        throw Exception('Empty download URL');
+      }
       
       return downloadUrl;
     } catch (e) {
       print('❌ Upload error: $e');
+      print('❌ Error type: ${e.runtimeType}');
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1398,11 +1447,6 @@ class SettingsDialog extends StatelessWidget {
               onTap: () => _showMessage(context, 'Account tapped'),
             ),
             const Divider(color: Colors.black26, thickness: 3),
-            
-            _buildSubMenuItem(
-              title: 'Change picture',
-              onTap: () => _showMessage(context, 'Change picture tapped'),
-            ),
             
             _buildSubMenuItem(
               title: 'Change password',
@@ -1509,9 +1553,9 @@ class SettingsDialog extends StatelessWidget {
               ),
             ),
             const Icon(
-              Icons.chevron_right,
+              Icons.arrow_back_ios,
               color: Colors.black,
-              size: 24,
+              size: 20,
             ),
           ],
         ),

@@ -1,0 +1,16 @@
+# Reguli temporare pentru testare (MAI PUȚIN SECURE)
+# Folosește acestea DOAR pentru testare, apoi revino la regulile securizate
+
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Reguli temporare - permite accesul pentru utilizatorii autentificați
+    match /{allPaths=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
+
+# ATENȚIE: Aceste reguli sunt mai puțin securizate!
+# După testare, revino la regulile din firebase_storage_rules.txt
+

@@ -1,0 +1,28 @@
+# Firebase Storage Security Rules pentru MedHive
+# Copiază aceste reguli în Firebase Console > Storage > Rules
+
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Reguli pentru pozele pacienților
+    match /patient_photos/{userId}/{fileName} {
+      // Doar utilizatorii autentificați pot accesa pozele proprii
+      allow read, write: if request.auth != null 
+        && request.auth.uid == userId;
+    }
+    
+    // Reguli pentru alte fișiere (dacă e nevoie)
+    match /{allPaths=**} {
+      // Blochează accesul la alte fișiere
+      allow read, write: if false;
+    }
+  }
+}
+
+# Instrucțiuni de implementare:
+# 1. Mergi la Firebase Console
+# 2. Selectează proiectul tău
+# 3. Mergi la Storage > Rules
+# 4. Înlocuiește regulile existente cu cele de mai sus
+# 5. Apasă "Publish"
+
