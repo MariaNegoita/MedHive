@@ -11,6 +11,7 @@ import 'package:flutter/foundation.dart'; // Pentru kIsWeb
 import 'terms_and_conditions_page.dart';
 import 'feedback_page.dart';
 import 'splash_screen_landing_page.dart';
+import 'patient_details_screen.dart';
 
 class Patient {
   final String name;
@@ -549,26 +550,34 @@ class PatientCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.92),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => PatientDetailsScreen(patient: patient),
           ),
-        ],
-        border: Border.all(color: Colors.white.withOpacity(0.3), width: 1),
-      ),
-      padding: const EdgeInsets.all(25),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              children: [
+        );
+      },
+      child: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.92),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+          border: Border.all(color: Colors.white.withOpacity(0.3), width: 1),
+        ),
+        padding: const EdgeInsets.all(25),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                children: [
                 PatientField(
                   label: "Name:",
                   value: patient.name,
@@ -701,6 +710,7 @@ class PatientCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
       ),
     );
   }
