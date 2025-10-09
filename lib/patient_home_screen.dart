@@ -92,6 +92,16 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
                   ),
                   child: Stack(
                     children: const [
+                      Center(
+                        child: Text(
+                          'Work in Progress',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF50341E),
+                          ),
+                        ),
+                      ),
                       Positioned(
                         top: 8,
                         right: 8,
